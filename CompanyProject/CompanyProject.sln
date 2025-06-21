@@ -3,7 +3,31 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.9.34728.123
 MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExcelUploadExtract", "ExcelUploadExtract\ExcelUploadExtract.csproj", "{1891D963-12BB-49EA-A963-6B3C77C7A0F2}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExcelUploadExtract.Test", "ExcelUploadExtract.Test\ExcelUploadExtract.Test.csproj", "{3197B054-C095-4E09-9BB8-BE1EE9E17C80}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExcelUploadExtract.UI", "ExcelUploadExtract.UI\ExcelUploadExtract.UI.csproj", "{39724209-863A-49CB-A56A-32F1A5BFAEE3}"
+EndProject
 Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{1891D963-12BB-49EA-A963-6B3C77C7A0F2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1891D963-12BB-49EA-A963-6B3C77C7A0F2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1891D963-12BB-49EA-A963-6B3C77C7A0F2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1891D963-12BB-49EA-A963-6B3C77C7A0F2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3197B054-C095-4E09-9BB8-BE1EE9E17C80}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3197B054-C095-4E09-9BB8-BE1EE9E17C80}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3197B054-C095-4E09-9BB8-BE1EE9E17C80}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3197B054-C095-4E09-9BB8-BE1EE9E17C80}.Release|Any CPU.Build.0 = Release|Any CPU
+		{39724209-863A-49CB-A56A-32F1A5BFAEE3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{39724209-863A-49CB-A56A-32F1A5BFAEE3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{39724209-863A-49CB-A56A-32F1A5BFAEE3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{39724209-863A-49CB-A56A-32F1A5BFAEE3}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
