@@ -30,10 +30,10 @@
 
 <MudDataGrid Items="salesLeads">
     <Columns>
-        <PropertyColumn Property="x => x.QuoteSentDate" Title="Quote Sent Date" Format="d"/>
-        <PropertyColumn Property="x => x.SalesPerson" Title="Sales Person"/>
-        <PropertyColumn Property="x => x.ProjectName" Title="Project Name" />
-        <PropertyColumn Property="x => x.QuoteAmount" Title="QuoteAmount" Format="C"/>
+        <PropertyColumn Property="x => x.Value.QuoteSentDate" Title="Quote Sent Date" Format="d"/>
+        <PropertyColumn Property="x => x.Value.SalesPerson" Title="Sales Person" />
+        <PropertyColumn Property="x => x.Value.ProjectName" Title="Project Name" />
+        <PropertyColumn Property="x => x.Value.QuoteAmount" Title="QuoteAmount" Format="C" />
     </Columns>
 </MudDataGrid>
 
@@ -42,16 +42,22 @@
     <MudAlert Severity="Severity.Success">@fileSuccessMessage</MudAlert>
 }
 
+@if (!string.IsNullOrEmpty(fileWarningMessage))
+{
+    <MudAlert Severity="Severity.Warning">@fileWarningMessage</MudAlert>
+}
+
 @code
 {
     Dictionary<string, string> failedFiles = new Dictionary<string, string>();
-    List<SalesLead> salesLeads = new List<SalesLead>();
-    string fileSuccessMessage = "";
+    Dictionary<string, SalesLead> salesLeads = new Dictionary<string, SalesLead>();
+    string fileSuccessMessage = "", fileWarningMessage = "";
 
     private async void UploadFiles(IReadOnlyList<IBrowserFile> files)
     {
         failedFiles.Clear();
         fileSuccessMessage = "";
+        fileWarningMessage = "";
 
         foreach (var file in files)
         {
@@ -82,6 +88,7 @@
                 await file.OpenReadStream().CopyToAsync(fs);
                 fs.Close();
 
+                var newLeadsAdded = false;
                 if (fileType == ".csv")
                 {
                     using (var reader = new StreamReader(path))
@@ -89,7 +96,11 @@
                     {
                         var records = csv.GetRecords<SalesLead>();
 
-                        salesLeads.AddRange(records);
+                        foreach(var record in records)
+                        {
+                            if (salesLeads.TryAdd(string.Concat(record.QuoteSentDate, record.SalesPerson, record.ProjectName), record))
+                                newLeadsAdded = true;
+                        }
                     }
                 }
                 else if (fileType == ".xls" || fileType == ".xlsx")
@@ -109,7 +120,10 @@
                     }
                 }
 
-                fileSuccessMessage = $"{file.Name} successfully uploaded to server";
+                if (newLeadsAdded)
+                    fileSuccessMessage = $"{file.Name} successfully uploaded";
+                else
+                    fileWarningMessage = $"{file.Name} contained no new leads";
             } 
             catch (Exception e)
             {
