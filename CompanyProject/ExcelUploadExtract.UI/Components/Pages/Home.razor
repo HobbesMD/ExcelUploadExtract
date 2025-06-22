@@ -1,7 +1,128 @@
 ﻿@page "/"
+@using CsvHelper
+@using ExcelUploadExtract.API.Models
+@using OfficeOpenXml
+@using System.Globalization
+@rendermode InteractiveServer
+@inject IWebHostEnvironment Environment
 
-<PageTitle>Home</PageTitle>
+<MudPopoverProvider />
 
-<h1>Hello, world!</h1>
+<PageTitle>File Upload</PageTitle>
 
-Welcome to your new app.
+<MudFileUpload T="IReadOnlyList<IBrowserFile>" Accept=".csv" FilesChanged="UploadFiles" MaximumFileCount="100">
+    <ActivatorContent>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.CloudUpload">
+            Upload Excel File
+        </MudButton>
+    </ActivatorContent>
+</MudFileUpload>
+
+@if (failedFiles?.Any() ?? false)
+{
+    foreach(var file in failedFiles)
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">Failed to upload file @file.Key: @file.Value</MudAlert>
+    }
+}
+
+<MudDataGrid Items="salesLeads">
+    <Columns>
+        <PropertyColumn Property="x => x.QuoteSentDate" Title="Quote Sent Date" Format="d"/>
+        <PropertyColumn Property="x => x.SalesPerson" Title="Sales Person"/>
+        <PropertyColumn Property="x => x.ProjectName" Title="Project Name" />
+        <PropertyColumn Property="x => x.QuoteAmount" Title="QuoteAmount" Format="C"/>
+    </Columns>
+</MudDataGrid>
+
+@if (!string.IsNullOrEmpty(fileSuccessMessage))
+{
+    <MudAlert Severity="Severity.Success">@fileSuccessMessage</MudAlert>
+}
+
+@code
+{
+    Dictionary<string, string> failedFiles = new Dictionary<string, string>();
+    List<SalesLead> salesLeads = new List<SalesLead>();
+    string fileSuccessMessage = "";
+
+    private async void UploadFiles(IReadOnlyList<IBrowserFile> files)
+    {
+        failedFiles.Clear();
+        fileSuccessMessage = "";
+
+        foreach (var file in files)
+        {
+            string path = "";
+            try
+            {
+                // TODO - config setting
+                var acceptedFileTypes = new string[] { ".csv" };
+                var maxFileSizeKB = 500;
+
+                var fileType = Path.GetExtension(file.Name);
+                if (!acceptedFileTypes.Contains(fileType))
+                {
+                    failedFiles.Add(file.Name, $"Invalid file type: {fileType}");
+                    continue;
+                }
+
+                if (file.Size > maxFileSizeKB * 1024)
+                {
+                    failedFiles.Add(file.Name, $"File exceeded maximum size of {maxFileSizeKB} KB");
+                    continue;
+                }
+
+                var trustedFileName = Path.GetFileNameWithoutExtension(Path.GetRandomFileName()) + fileType;
+                path = Path.Combine(Environment.ContentRootPath, "Uploads", trustedFileName);
+
+                await using FileStream fs = new(path, FileMode.Create);
+                await file.OpenReadStream().CopyToAsync(fs);
+                fs.Close();
+
+                if (fileType == ".csv")
+                {
+                    using (var reader = new StreamReader(path))
+                    using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+                    {
+                        var records = csv.GetRecords<SalesLead>();
+
+                        salesLeads.AddRange(records);
+                    }
+                }
+                else if (fileType == ".xls" || fileType == ".xlsx")
+                {
+                    using (MemoryStream ms = new MemoryStream())
+                    {
+                        await file.OpenReadStream().CopyToAsync(ms);
+                        ms.Position = 0;
+
+                        FileInfo fileInfo = new FileInfo(file.Name);
+                        using (ExcelPackage package = new ExcelPackage(ms))
+                        {
+                            ExcelWorksheet ws = package.Workbook.Worksheets.FirstOrDefault();
+                            int colCount = ws.Dimension.End.Column;
+                            int rowCount = ws.Dimension.End.Row;
+                        }
+                    }
+                }
+
+                fileSuccessMessage = $"{file.Name} successfully uploaded to server";
+            } 
+            catch (Exception e)
+            {
+                failedFiles.Add(file.Name, "Unknown Error");
+                // Probably want to log the error somewhere server side
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(path) && File.Exists(path))
+                    File.Delete(path);
+
+                this.StateHasChanged();
+            }
+        }
+    }
+}
