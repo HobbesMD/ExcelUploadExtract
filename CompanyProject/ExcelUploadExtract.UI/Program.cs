@@ -1,6 +1,7 @@
-using ExcelUploadExtract.UI;
 using ExcelUploadExtract.UI.Components;
+using ExcelUploadExtract.UI.Data;
 using MudBlazor.Services;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,6 +9,11 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddMudServices();
+
+builder.Services.AddDbContextFactory<SalesLeadContext>(options =>
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("SalesLeadContext") ??
+        throw new InvalidOperationException("Connection string 'SalesLeadContext' not found.")));
 
 var app = builder.Build();
 
