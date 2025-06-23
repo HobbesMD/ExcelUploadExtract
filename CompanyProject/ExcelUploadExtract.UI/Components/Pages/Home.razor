@@ -122,6 +122,10 @@
         this.StateHasChanged();
     }
 
+    /// <summary>
+    /// Saves file to server, reads it, then deletes
+    /// </summary>
+    /// <returns>true if new leads found in file</returns>
     private async Task<bool> UploadFile(IBrowserFile file)
     {
         string path = "";
@@ -145,12 +149,14 @@
                     && l.SalesPerson == lead.SalesPerson
                     && l.ProjectName == lead.ProjectName));
 
+            var addedNewLead = false;
             foreach (var lead in newLeads)
             {
-                SalesLeads.TryAdd(string.Concat(lead.QuoteSentDate, lead.SalesPerson, lead.ProjectName), lead);
+                if (SalesLeads.TryAdd(string.Concat(lead.QuoteSentDate, lead.SalesPerson, lead.ProjectName), lead))
+                    addedNewLead = true;
             }
 
-            return newLeads.Any();
+            return addedNewLead;
         }
         finally
         {
@@ -172,6 +178,9 @@
             throw new ArgumentException($"Exceeds maximum size of {MaxFileSizeKB} KB");
     }
 
+    /// <summary>
+    /// Send leads to CRM, adds to database, removes from SalesLeads if successful
+    /// </summary>
     private async void SendLeadsToCRM()
     {
         _sendingToCRM = true;
