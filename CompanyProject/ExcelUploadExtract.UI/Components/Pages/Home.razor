@@ -16,7 +16,11 @@
 
 <PageTitle>File Upload</PageTitle>
 
-<MudFileUpload T="IReadOnlyList<IBrowserFile>" Accept="@string.Join(",", AcceptedFileTypes)" FilesChanged="UploadFiles" MaximumFileCount="100">
+<MudFileUpload T="IReadOnlyList<IBrowserFile>" 
+    Accept="@string.Join(",", AcceptedFileTypes)" 
+    FilesChanged="UploadFiles" 
+    MaximumFileCount="100"
+    Disabled=@(_loadingFile || _sendingToCRM)>
     <ActivatorContent>
         <MudButton Variant="Variant.Filled"
                    Color="Color.Primary"
@@ -28,11 +32,19 @@
 
 @if (FailedFiles?.Any() ?? false)
 {
-    foreach(var file in FailedFiles)
+    foreach (var file in FailedFiles)
     {
-        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@file</MudAlert>
+        <MudAlert Severity="Severity.Error">@file</MudAlert>
     }
 }
+
+@if (WarningFiles?.Any() ?? false)
+{
+    foreach (var file in WarningFiles)
+    {
+        <MudAlert Severity="Severity.Warning">@file</MudAlert>
+    }
+}                                           
 
 <MudDataGrid Items="SalesLeads">
     <Columns>
@@ -43,58 +55,53 @@
     </Columns>
 </MudDataGrid>
 
-<MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@SendLeadsToCRM">
-    @if (_sendingToCRM)
-    {
-        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
-        <MudText Class="ms-2">Processing</MudText>
-    }
-    else
-    {
+<MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@SendLeadsToCRM" Disabled="@(!SalesLeads.Any() || _loadingFile || _sendingToCRM)">
         <MudIcon Icon="@Icons.Material.Filled.Save" />
         <MudText>Save new rows to CRM</MudText>
-    }
 </MudButton>
 
-@if (!string.IsNullOrEmpty(fileSuccessMessage))
+@if (_showDataSaveMessage)
 {
-    <MudAlert Severity="Severity.Success" ShowCloseIcon="true">@fileSuccessMessage</MudAlert>
-}
-
-@if (!string.IsNullOrEmpty(fileWarningMessage))
-{
-    <MudAlert Severity="Severity.Warning" ShowCloseIcon="true">@fileWarningMessage</MudAlert>
+    if (_dataSaveSuccessful)
+    {
+        <MudAlert Severity="Severity.Success">Data saved successfully</MudAlert>
+    } 
+    else
+    {
+        <MudAlert Severity="Severity.Error">Data failed to save</MudAlert>
+    }
 }
 
 @code
 {
     private SalesLeadContext? _context { get; set; }
+
     private bool _sendingToCRM = false;
     private bool _loadingFile = false;
+    private bool _showDataSaveMessage = false;
+    private bool _dataSaveSuccessful = false;
 
     public string[] AcceptedFileTypes = new string[0];
+    public int MaxFileSizeKB;
     public List<string> FailedFiles = new List<string>();
+    public List<string> WarningFiles = new List<string>();
     public List<SalesLead> SalesLeads = new List<SalesLead>();
-
-    public bool showFileSuccess = true, showFileWarningMessage = true;
-    public string fileSuccessMessage = "", fileWarningMessage = "";
 
     private async void UploadFiles(IReadOnlyList<IBrowserFile> files)
     {
         FailedFiles.Clear();
-        fileSuccessMessage = "";
-        fileWarningMessage = "";
+        WarningFiles.Clear();
         _loadingFile = true;
+        _dataSaveSuccessful = false;
+        _showDataSaveMessage = false;
         this.StateHasChanged();
 
         foreach (var file in files)
         {
             try
             {
-                if (await UploadFile(file))
-                    fileSuccessMessage = $"{file.Name} successfully uploaded";
-                else
-                    fileWarningMessage = $"{file.Name} contained no new leads";
+                if (!await UploadFile(file))
+                    WarningFiles.Add($"{file.Name} contained no new leads");
             }
             catch (Exception e)
             {
@@ -103,6 +110,7 @@
 
         }
 
+        _loadingFile = false;
         this.StateHasChanged();
     }
 
@@ -110,7 +118,7 @@
     {
         string path = "";
 
-        ValidateFile(file);
+        ValidateUpload(file);
 
         try
         {
@@ -122,73 +130,49 @@
             await file.OpenReadStream().CopyToAsync(fs);
             fs.Close();
 
-            if (file.ContentType == "text/csv")
-            {
-                using (var reader = new StreamReader(path))
-                using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
-                {
-                    var records = csv.GetRecords<SalesLead>();
-                    var newLeads = RemoveExistingLeads(records);
-                    SalesLeads.AddRange(newLeads);
+            var fileUpload = new FileUpload(path, file.ContentType);
+            var salesLeads = fileUpload.GetSalesLeads();
+            var newLeads = RemoveExistingLeads(salesLeads);
+            SalesLeads.AddRange(newLeads);
 
-                    return newLeads.Any();
-                }
-            }
-
-            if (file.ContentType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-            {
-                using (MemoryStream ms = new MemoryStream())
-                {
-                    await file.OpenReadStream().CopyToAsync(ms);
-                    ms.Position = 0;
-
-                    FileInfo fileInfo = new FileInfo(file.Name);
-                    using (ExcelPackage package = new ExcelPackage(ms))
-                    {
-                        ExcelWorksheet ws = package.Workbook.Worksheets.FirstOrDefault();
-                        int colCount = ws.Dimension.End.Column;
-                        int rowCount = ws.Dimension.End.Row;
-                    }
-                }
-            }
-        }
-        catch (Exception e)
-        {
-            FailedFiles.Add($"{file.Name}: Unknown Error");
-            // Probably want to log the error somewhere server side
+            return newLeads.Any();
         }
         finally
         {
             if (!string.IsNullOrEmpty(path) && File.Exists(path))
                 File.Delete(path);
         }
-
-        return false;
     }
 
     /// <summary>
     /// Throws exception if file is not a valid file for upload.
     /// </summary>
-    private void ValidateFile(IBrowserFile file)
+    private void ValidateUpload(IBrowserFile file)
     {
-        // TODO - config setting
-        var maxFileSizeKB = 500;
-
         var fileType = Path.GetExtension(file.Name);
         if (!AcceptedFileTypes.Contains(fileType))
             throw new ArgumentException($"Invalid file type: {fileType} ({file.Name})");
 
-        if (file.Size > maxFileSizeKB * 1024)
-            throw new ArgumentException($"{file.Name} exceeded maximum size of {maxFileSizeKB} KB");
+        if (file.Size > MaxFileSizeKB * 1024)
+            throw new ArgumentException($"{file.Name} exceeded maximum size of {MaxFileSizeKB} KB");
     }
 
     private async void SendLeadsToCRM()
     {
         _sendingToCRM = true;
+        _dataSaveSuccessful = false;
         this.StateHasChanged();
 
-        await _context.AddRangeAsync(SalesLeads.Select(l => l));
-        await _context.SaveChangesAsync();
+        try
+        {
+            await _context.AddRangeAsync(SalesLeads.Select(l => l));
+            await _context.SaveChangesAsync();
+            _dataSaveSuccessful = true;
+        }
+        catch (Exception e)
+        {
+            
+        }
 
         _sendingToCRM = false;
         this.StateHasChanged();
@@ -199,6 +183,7 @@
         _context = DbFactory.CreateDbContext();
 
         AcceptedFileTypes = Configuration.GetSection("AcceptedFileTypes").GetChildren().Select(x => x.Value).ToArray();
+        MaxFileSizeKB = int.Parse(Configuration.GetSection("MaxFileSizeKB").Value ?? "0");
     }
 
     private IEnumerable<SalesLead> RemoveExistingLeads(IEnumerable<SalesLead> leads)
