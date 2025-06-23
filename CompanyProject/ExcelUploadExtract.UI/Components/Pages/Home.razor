@@ -39,23 +39,23 @@
     </MudContainer>
 
     <MudContainer>
-        @if (FailedFiles?.Any() ?? false)
+        @if (FailedMessages?.Any() ?? false)
         {
-            foreach (var file in FailedFiles)
+            foreach (var file in FailedMessages)
             {
-                <MudAlert Severity="Severity.Error" Class="pt-2">@file</MudAlert>
+                <MudAlert Severity="Severity.Error" Class="mt-2">@file</MudAlert>
             }
         }
 
-        @if (WarningFiles?.Any() ?? false)
+        @if (WarningMessages?.Any() ?? false)
         {
-            foreach (var file in WarningFiles)
+            foreach (var file in WarningMessages)
             {
-                <MudAlert Severity="Severity.Warning" Class="pt-2">@file</MudAlert>
+                <MudAlert Severity="Severity.Warning" Class="mt-2">@file</MudAlert>
             }
         }
 
-        <MudDataGrid Items="SalesLeads" Class="my-4">
+        <MudDataGrid Items="SalesLeads.Values" Class="my-4">
             <Columns>
                 <PropertyColumn Property="x => x.QuoteSentDate" Title="Quote Sent Date" Format="d" />
                 <PropertyColumn Property="x => x.SalesPerson" Title="Sales Person" />
@@ -90,14 +90,14 @@
 
     public string[] AcceptedFileTypes = new string[0];
     public int MaxFileSizeKB;
-    public List<string> FailedFiles = new List<string>();
-    public List<string> WarningFiles = new List<string>();
-    public List<SalesLead> SalesLeads = new List<SalesLead>();
+    public List<string> FailedMessages = new List<string>();
+    public List<string> WarningMessages = new List<string>();
+    public Dictionary<string, SalesLead> SalesLeads = new Dictionary<string, SalesLead>();
 
     private async void UploadFiles(IReadOnlyList<IBrowserFile> files)
     {
-        FailedFiles.Clear();
-        WarningFiles.Clear();
+        FailedMessages.Clear();
+        WarningMessages.Clear();
         _loadingFile = true;
         _dataSaveSuccessful = false;
         _showDataSaveMessage = false;
@@ -108,12 +108,12 @@
             try
             {
                 if (!await UploadFile(file))
-                    WarningFiles.Add($"{file.Name} contained no new leads");
+                    WarningMessages.Add($"{file.Name} contained no new leads");
             }
             catch (Exception e)
             {
                 // Real world probably want to prettify and not show all error messages but in this case it'll do
-                FailedFiles.Add($"{file.Name}: {e.ToString()}");
+                FailedMessages.Add($"{file.Name}: {e.Message}");
             }
 
         }
@@ -140,8 +140,15 @@
 
             var fileUpload = new FileUpload(path, file.ContentType);
             var salesLeads = fileUpload.GetSalesLeads();
-            var newLeads = RemoveExistingLeads(salesLeads);
-            SalesLeads.AddRange(newLeads);
+            var newLeads = salesLeads
+                .Where(lead => !_context.SalesLeads.Any(l => l.QuoteSentDate == lead.QuoteSentDate
+                    && l.SalesPerson == lead.SalesPerson
+                    && l.ProjectName == lead.ProjectName));
+
+            foreach (var lead in newLeads)
+            {
+                SalesLeads.TryAdd(string.Concat(lead.QuoteSentDate, lead.SalesPerson, lead.ProjectName), lead);
+            }
 
             return newLeads.Any();
         }
@@ -159,10 +166,10 @@
     {
         var fileType = Path.GetExtension(file.Name);
         if (!AcceptedFileTypes.Contains(fileType))
-            throw new ArgumentException($"Invalid file type: {fileType} ({file.Name})");
+            throw new ArgumentException($"Invalid file type: {fileType}");
 
         if (file.Size > MaxFileSizeKB * 1024)
-            throw new ArgumentException($"{file.Name} exceeded maximum size of {MaxFileSizeKB} KB");
+            throw new ArgumentException($"Exceeds maximum size of {MaxFileSizeKB} KB");
     }
 
     private async void SendLeadsToCRM()
@@ -173,9 +180,10 @@
 
         try
         {
-            await _context.AddRangeAsync(SalesLeads.Select(l => l));
+            await _context.AddRangeAsync(SalesLeads.Select(l => l.Value));
             await _context.SaveChangesAsync();
             _dataSaveSuccessful = true;
+            SalesLeads.Clear();
         }
         catch (Exception e)
         {
@@ -184,7 +192,6 @@
 
         _showDataSaveMessage = true;
         _sendingToCRM = false;
-        SalesLeads.Clear();
         this.StateHasChanged();
     }
 
@@ -194,13 +201,6 @@
 
         AcceptedFileTypes = Configuration.GetSection("AcceptedFileTypes").GetChildren().Select(x => x.Value).ToArray();
         MaxFileSizeKB = int.Parse(Configuration.GetSection("MaxFileSizeKB").Value ?? "0");
-    }
-
-    private IEnumerable<SalesLead> RemoveExistingLeads(IEnumerable<SalesLead> leads)
-    {
-        return leads.Where(lead => !_context.SalesLeads.Any(l => l.QuoteSentDate == lead.QuoteSentDate
-            && l.SalesPerson == lead.SalesPerson
-            && l.ProjectName == lead.ProjectName));
     }
 
     public void Dispose() => _context?.Dispose();
