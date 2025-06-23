@@ -35,7 +35,7 @@ namespace ExcelUploadExtract.UI
             using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
             {
                 var records = csv.GetRecords<SalesLead>();
-                return records;
+                return records.ToList();
             }
         }
 

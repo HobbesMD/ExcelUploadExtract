@@ -16,61 +16,68 @@
 
 <PageTitle>File Upload</PageTitle>
 
-<MudFileUpload T="IReadOnlyList<IBrowserFile>" 
-    Accept="@string.Join(",", AcceptedFileTypes)" 
-    FilesChanged="UploadFiles" 
-    MaximumFileCount="100"
-    Disabled=@(_loadingFile || _sendingToCRM)>
-    <ActivatorContent>
-        <MudButton Variant="Variant.Filled"
-                   Color="Color.Primary"
-                   StartIcon="@Icons.Material.Filled.CloudUpload">
-            Upload Excel File
+<MudContainer MaxWidth="MaxWidth.Large">
+    <MudContainer class="d-flex justify-space-between">
+        <MudFileUpload T="IReadOnlyList<IBrowserFile>"
+                       Accept="@string.Join(",", AcceptedFileTypes)"
+                       FilesChanged="UploadFiles"
+                       MaximumFileCount="100"
+                       Disabled=@(_loadingFile || _sendingToCRM)>
+            <ActivatorContent>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.CloudUpload">
+                    Upload Excel File
+                </MudButton>
+            </ActivatorContent>
+        </MudFileUpload>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@SendLeadsToCRM" Disabled="@(!SalesLeads.Any() || _loadingFile || _sendingToCRM)">
+            <MudIcon Icon="@Icons.Material.Filled.Save" />
+            <MudText>Save new rows to CRM</MudText>
         </MudButton>
-    </ActivatorContent>
-</MudFileUpload>
+    </MudContainer>
 
-@if (FailedFiles?.Any() ?? false)
-{
-    foreach (var file in FailedFiles)
-    {
-        <MudAlert Severity="Severity.Error">@file</MudAlert>
-    }
-}
+    <MudContainer>
+        @if (FailedFiles?.Any() ?? false)
+        {
+            foreach (var file in FailedFiles)
+            {
+                <MudAlert Severity="Severity.Error" Class="pt-2">@file</MudAlert>
+            }
+        }
 
-@if (WarningFiles?.Any() ?? false)
-{
-    foreach (var file in WarningFiles)
-    {
-        <MudAlert Severity="Severity.Warning">@file</MudAlert>
-    }
-}                                           
+        @if (WarningFiles?.Any() ?? false)
+        {
+            foreach (var file in WarningFiles)
+            {
+                <MudAlert Severity="Severity.Warning" Class="pt-2">@file</MudAlert>
+            }
+        }
 
-<MudDataGrid Items="SalesLeads">
-    <Columns>
-        <PropertyColumn Property="x => x.QuoteSentDate" Title="Quote Sent Date" Format="d"/>
-        <PropertyColumn Property="x => x.SalesPerson" Title="Sales Person" />
-        <PropertyColumn Property="x => x.ProjectName" Title="Project Name" />
-        <PropertyColumn Property="x => x.QuoteAmount" Title="QuoteAmount" Format="C" />
-    </Columns>
-</MudDataGrid>
+        <MudDataGrid Items="SalesLeads" Class="my-4">
+            <Columns>
+                <PropertyColumn Property="x => x.QuoteSentDate" Title="Quote Sent Date" Format="d" />
+                <PropertyColumn Property="x => x.SalesPerson" Title="Sales Person" />
+                <PropertyColumn Property="x => x.ProjectName" Title="Project Name" />
+                <PropertyColumn Property="x => x.QuoteAmount" Title="QuoteAmount" Format="C" />
+            </Columns>
+        </MudDataGrid>
 
-<MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@SendLeadsToCRM" Disabled="@(!SalesLeads.Any() || _loadingFile || _sendingToCRM)">
-        <MudIcon Icon="@Icons.Material.Filled.Save" />
-        <MudText>Save new rows to CRM</MudText>
-</MudButton>
+        @if (_showDataSaveMessage)
+        {
+            if (_dataSaveSuccessful)
+            {
+                <MudAlert Severity="Severity.Success">Data saved successfully</MudAlert>
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Error">Data failed to save</MudAlert>
+            }
+        }
+    </MudContainer>
+</MudContainer>
 
-@if (_showDataSaveMessage)
-{
-    if (_dataSaveSuccessful)
-    {
-        <MudAlert Severity="Severity.Success">Data saved successfully</MudAlert>
-    } 
-    else
-    {
-        <MudAlert Severity="Severity.Error">Data failed to save</MudAlert>
-    }
-}
 
 @code
 {
@@ -105,7 +112,8 @@
             }
             catch (Exception e)
             {
-                FailedFiles.Add($"{file.Name}: Unknown Error");
+                // Real world probably want to prettify and not show all error messages but in this case it'll do
+                FailedFiles.Add($"{file.Name}: {e.ToString()}");
             }
 
         }
@@ -171,10 +179,12 @@
         }
         catch (Exception e)
         {
-            
+
         }
 
+        _showDataSaveMessage = true;
         _sendingToCRM = false;
+        SalesLeads.Clear();
         this.StateHasChanged();
     }
 
